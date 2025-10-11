@@ -1,0 +1,15 @@
+[package]
+name = "ferro_feed"
+version = "0.1.0"
+edition = "2021"
+description = "Low-latency market data feed server: lock-free broadcast ring + WebSocket fan-out"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1.38", features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal", "io-util"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
