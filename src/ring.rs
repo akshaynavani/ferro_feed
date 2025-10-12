@@ -460,4 +460,40 @@ mod tests {
         tx.publish_batch([10, 11, 12]);
         assert_eq!(handle.await.unwrap(), vec![10, 11, 12]);
     }
+
+    #[test]
+    fn concurrent_reader_never_sees_torn_or_reordered_values() {
+        // Each value is (i, !i); a torn read would break the invariant.
+        let (mut tx, sub) = channel::<(u64, u64)>(1024);
+        let readers: Vec<_> = (0..4)
+            .map(|_| {
+                let mut rx = sub.subscribe_from_oldest();
+                std::thread::spawn(move || {
+                    let mut last: Option<u64> = None;
+                    let mut seen = 0u64;
+                    loop {
+                        match rx.try_recv() {
+                            Ok((a, b)) => {
+                                assert_eq!(a, !b, "torn read");
+                                if let Some(prev) = last {
+                                    assert!(a > prev, "out of order: {prev} then {a}");
+                                }
+                                last = Some(a);
+                                seen += 1;
+                            }
+                            Err(RecvError::Empty | RecvError::Lagged(_)) => std::hint::spin_loop(),
+                            Err(RecvError::Closed) => return seen,
+                        }
+                    }
+                })
+            })
+            .collect();
+        for i in 0..200_000u64 {
+            tx.publish((i, !i));
+        }
+        drop(tx);
+        for r in readers {
+            assert!(r.join().unwrap() > 0);
+        }
+    }
 }
