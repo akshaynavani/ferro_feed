@@ -5,3 +5,4 @@
 //! event through its own cursor.
 
 pub mod ring;
+pub mod model;
