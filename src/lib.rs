@@ -7,3 +7,4 @@
 pub mod ring;
 pub mod model;
 pub mod codec;
+pub mod feed;
