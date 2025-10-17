@@ -38,7 +38,6 @@ pub struct Session {
     format: WireFormat,
     /// Reused across bursts to avoid per-burst allocation.
     burst: Vec<MarketEvent>,
-    binary_buf: Vec<u8>,
 }
 
 /// Why a session ended.
@@ -59,7 +58,6 @@ impl Session {
             reader,
             sub: Subscription::default(),
             burst: Vec::with_capacity(max_batch),
-            binary_buf: Vec::with_capacity(max_batch * EVENT_SIZE),
         }
     }
 
@@ -167,11 +165,13 @@ impl Session {
             WireFormat::Binary => {
                 // Events are copied byte-for-byte from the ring value into
                 // the frame; there is no serialization step.
-                self.binary_buf.clear();
+                // The frame takes ownership of its buffer, so build it at
+                // its exact size in one allocation.
+                let mut frame = Vec::with_capacity(self.burst.len() * EVENT_SIZE);
                 for ev in &self.burst {
-                    self.binary_buf.extend_from_slice(encode_binary(ev));
+                    frame.extend_from_slice(encode_binary(ev));
                 }
-                tx.send(Message::Binary(self.binary_buf.clone())).await
+                tx.send(Message::Binary(frame)).await
             }
             WireFormat::Json => {
                 for ev in &self.burst {
