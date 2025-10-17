@@ -8,3 +8,5 @@ pub mod ring;
 pub mod model;
 pub mod codec;
 pub mod feed;
+pub mod protocol;
+pub mod subscription;
