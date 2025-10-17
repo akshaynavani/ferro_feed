@@ -10,3 +10,4 @@ pub mod codec;
 pub mod feed;
 pub mod protocol;
 pub mod subscription;
+pub mod session;
