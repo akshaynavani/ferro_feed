@@ -11,3 +11,4 @@ pub mod feed;
 pub mod protocol;
 pub mod subscription;
 pub mod session;
+pub mod server;
