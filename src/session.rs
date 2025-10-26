@@ -7,6 +7,9 @@
 //! by the producer; it gets a `lagged` notice and continues from the recent
 //! past instead of slowing the feed for everyone else.
 
+use std::sync::atomic::Ordering::Relaxed;
+use std::sync::Arc;
+
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
@@ -16,6 +19,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
 use crate::codec::{encode_binary, encode_json, WireFormat};
+use crate::metrics::Metrics;
 use crate::model::{now_ns, MarketEvent, EVENT_SIZE};
 use crate::protocol::{ClientRequest, ServerMessage};
 use crate::ring::{Reader, RecvError};
@@ -29,6 +33,7 @@ pub struct SessionConfig {
     pub max_batch: usize,
     pub default_format: WireFormat,
     pub symbols: Vec<String>,
+    pub metrics: Arc<Metrics>,
 }
 
 pub struct Session {
@@ -118,6 +123,8 @@ impl Session {
                         }
                         Err(RecvError::Lagged(skipped)) => {
                             tracing::debug!(session = self.cfg.id, skipped, "session lagged");
+                            self.cfg.metrics.lag_notices.fetch_add(1, Relaxed);
+                            self.cfg.metrics.events_skipped.fetch_add(skipped, Relaxed);
                             let notice = ServerMessage::Lagged { skipped };
                             if let Err(e) = tx.send(Message::Text(notice.to_json())).await {
                                 return SessionEnd::Error(e);
@@ -171,17 +178,37 @@ impl Session {
                 for ev in &self.burst {
                     frame.extend_from_slice(encode_binary(ev));
                 }
-                tx.send(Message::Binary(frame)).await
+                let bytes = frame.len() as u64;
+                tx.send(Message::Binary(frame)).await?;
+                self.record_sent(1, bytes);
             }
             WireFormat::Json => {
+                let mut frames = 0;
+                let mut bytes = 0;
                 for ev in &self.burst {
                     if let Some(text) = encode_json(ev) {
+                        frames += 1;
+                        bytes += text.len() as u64;
                         tx.feed(Message::Text(text)).await?;
                     }
                 }
-                tx.flush().await
+                tx.flush().await?;
+                self.record_sent(frames, bytes);
             }
         }
+        Ok(())
+    }
+
+    /// Records counters and publish -> write latency for the burst just sent.
+    fn record_sent(&self, frames: u64, bytes: u64) {
+        let m = &self.cfg.metrics;
+        let now = now_ns();
+        for ev in &self.burst {
+            m.record_latency_ns(now.saturating_sub(ev.publish_ts_ns));
+        }
+        m.events_sent.fetch_add(self.burst.len() as u64, Relaxed);
+        m.frames_sent.fetch_add(frames, Relaxed);
+        m.bytes_sent.fetch_add(bytes, Relaxed);
     }
 
     fn handle_request(&mut self, text: &str) -> ServerMessage {

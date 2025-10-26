@@ -3,6 +3,10 @@
 pub mod ingest;
 pub mod sim;
 
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
+use crate::metrics::Metrics;
 use crate::model::{now_ns, MarketEvent};
 use crate::ring::{Producer, Subscriber};
 
@@ -11,6 +15,7 @@ use crate::ring::{Producer, Subscriber};
 pub struct FeedPublisher {
     producer: Producer<MarketEvent>,
     next_seq: u64,
+    metrics: Option<Arc<Metrics>>,
 }
 
 impl FeedPublisher {
@@ -18,6 +23,27 @@ impl FeedPublisher {
         FeedPublisher {
             producer,
             next_seq: 1,
+            metrics: None,
+        }
+    }
+
+    pub fn with_metrics(mut self, metrics: Arc<Metrics>) -> Self {
+        self.metrics = Some(metrics);
+        self
+    }
+
+    /// Counts events dropped by a source before publishing (e.g. malformed
+    /// upstream frames).
+    pub fn record_rejected(&self, n: u64) {
+        if let (Some(m), true) = (&self.metrics, n > 0) {
+            m.ingest_rejected.fetch_add(n, Ordering::Relaxed);
+        }
+    }
+
+    #[inline]
+    fn record_published(&self, n: u64) {
+        if let Some(m) = &self.metrics {
+            m.events_published.fetch_add(n, Ordering::Relaxed);
         }
     }
 
@@ -32,6 +58,7 @@ impl FeedPublisher {
     pub fn publish(&mut self, ev: MarketEvent) {
         let ev = self.stamp(ev, now_ns());
         self.producer.publish(ev);
+        self.record_published(1);
     }
 
     /// Publishes a batch with a single timestamp read and a single wake-up.
@@ -46,6 +73,7 @@ impl FeedPublisher {
             ev
         }));
         self.next_seq = seq;
+        self.record_published(n as u64);
         n
     }
 

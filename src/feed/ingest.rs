@@ -74,13 +74,16 @@ pub async fn serve_upstream(
 
         let whole = filled - filled % EVENT_SIZE;
         batch.clear();
+        let mut rejected = 0;
         for frame in buf[..whole].chunks_exact(EVENT_SIZE) {
             match decode_binary(frame) {
                 Some(ev) if ev.is_valid() => batch.push(ev),
-                _ => stats.rejected += 1,
+                _ => rejected += 1,
             }
         }
         stats.accepted += publisher.publish_batch(&batch) as u64;
+        stats.rejected += rejected;
+        publisher.record_rejected(rejected);
 
         // Keep the partial trailing frame for the next read.
         buf.copy_within(whole..filled, 0);

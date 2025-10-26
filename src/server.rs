@@ -12,6 +12,7 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::codec::WireFormat;
+use crate::metrics::Metrics;
 use crate::model::MarketEvent;
 use crate::ring::Subscriber;
 use crate::session::{Session, SessionConfig, SessionEnd};
@@ -39,6 +40,7 @@ impl Default for ServerConfig {
 struct ServerState {
     cfg: ServerConfig,
     subscriber: Subscriber<MarketEvent>,
+    metrics: Arc<Metrics>,
     next_id: AtomicU64,
     active: AtomicUsize,
 }
@@ -49,6 +51,7 @@ struct ActiveGuard(Arc<ServerState>);
 impl Drop for ActiveGuard {
     fn drop(&mut self) {
         self.0.active.fetch_sub(1, Ordering::Relaxed);
+        self.0.metrics.sessions_active.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -57,11 +60,13 @@ pub async fn serve(
     listener: TcpListener,
     subscriber: Subscriber<MarketEvent>,
     cfg: ServerConfig,
+    metrics: Arc<Metrics>,
     mut shutdown: watch::Receiver<bool>,
 ) -> std::io::Result<()> {
     let state = Arc::new(ServerState {
         cfg,
         subscriber,
+        metrics,
         next_id: AtomicU64::new(1),
         active: AtomicUsize::new(0),
     });
@@ -106,6 +111,7 @@ async fn handle_connection(
     };
 
     let active = state.active.fetch_add(1, Ordering::Relaxed) + 1;
+    state.metrics.sessions_active.fetch_add(1, Ordering::Relaxed);
     let _guard = ActiveGuard(state.clone());
     if active > state.cfg.max_sessions {
         let _ = ws
@@ -118,12 +124,14 @@ async fn handle_connection(
     }
 
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
+    state.metrics.sessions_total.fetch_add(1, Ordering::Relaxed);
     let session = Session::new(
         SessionConfig {
             id,
             max_batch: state.cfg.max_batch,
             default_format: state.cfg.default_format,
             symbols: state.cfg.symbols.clone(),
+            metrics: state.metrics.clone(),
         },
         state.subscriber.subscribe(),
     );
