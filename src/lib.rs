@@ -12,3 +12,4 @@ pub mod protocol;
 pub mod subscription;
 pub mod session;
 pub mod server;
+pub mod metrics;
