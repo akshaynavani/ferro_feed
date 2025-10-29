@@ -14,6 +14,9 @@ rand = { version = "0.8", features = ["small_rng"] }
 tracing = "0.1"
 tokio-tungstenite = "0.23"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1.0"
 
 [profile.release]
 opt-level = 3
