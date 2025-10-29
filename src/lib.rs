@@ -14,3 +14,4 @@ pub mod session;
 pub mod server;
 pub mod metrics;
 pub mod stats;
+pub mod config;
