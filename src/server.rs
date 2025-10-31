@@ -83,8 +83,8 @@ pub async fn serve(
                     Err(e) => tracing::warn!(error = %e, "accept failed"),
                 }
             }
-            _ = shutdown.changed() => {
-                if *shutdown.borrow() {
+            changed = shutdown.changed() => {
+                if changed.is_err() || *shutdown.borrow() {
                     tracing::info!("websocket server stopping");
                     return Ok(());
                 }

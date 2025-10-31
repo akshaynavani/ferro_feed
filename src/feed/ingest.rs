@@ -36,7 +36,11 @@ pub async fn run(
                     Err(e) => tracing::warn!(%peer, error = %e, "upstream error"),
                 }
             }
-            _ = shutdown.changed() => {}
+            changed = shutdown.changed() => {
+                if changed.is_err() {
+                    return Ok(());
+                }
+            }
         }
         if *shutdown.borrow() {
             return Ok(());

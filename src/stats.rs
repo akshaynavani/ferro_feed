@@ -42,8 +42,8 @@ pub async fn serve(
                     }
                 });
             }
-            _ = shutdown.changed() => {
-                if *shutdown.borrow() {
+            changed = shutdown.changed() => {
+                if changed.is_err() || *shutdown.borrow() {
                     return Ok(());
                 }
             }
