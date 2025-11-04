@@ -41,18 +41,18 @@ wire format is the event's bytes verbatim (zero-copy encode).
 ### Phase 3 — WebSocket server and subscriptions
 - `src/protocol.rs`: client requests (`subscribe`, `unsubscribe`, `ping`, `format`) and
   server control messages.
-- `src/subscription.rs`: per-session symbol filter (bitset over a symbol registry + wildcard).
+- `src/subscription.rs`: per-session symbol filter (hash set of 8-byte symbols + wildcard).
 - `src/server.rs`, `src/session.rs`: accept loop, handshake, per-session reader task with
   select over client messages and ring events, lag notifications, clean close.
 
 ### Phase 4 — Config, metrics, binary entrypoint
 - `src/config.rs` (clap + env), `src/metrics.rs` (atomic counters, publish-to-send latency
-  histogram buckets), `/stats` JSON over a side HTTP port, `src/main.rs` with graceful
-  shutdown on Ctrl-C.
+  histogram buckets), `src/stats.rs` (`/stats` JSON over a side HTTP port), `src/main.rs`
+  with graceful shutdown on Ctrl-C.
 
 ### Phase 5 — Client, benchmarks, tests
 - `src/bin/feed_client.rs`: subscribes, measures end-to-end latency percentiles with
-  hdrhistogram.
+  hdrhistogram; `src/bin/upstream_sim.rs` streams binary events into the ingest port.
 - `benches/ring.rs` (criterion) for publish/read throughput.
 - `tests/ring_concurrency.rs`, `tests/ws_end_to_end.rs`.
 - `.gitignore`, `README.md` with architecture diagram, run/test instructions.

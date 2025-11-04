@@ -85,9 +85,9 @@ pub async fn serve_upstream(
                 _ => rejected += 1,
             }
         }
-        stats.accepted += publisher.publish_batch(&batch) as u64;
         stats.rejected += rejected;
         publisher.record_rejected(rejected);
+        stats.accepted += publisher.publish_batch(&batch) as u64;
 
         // Keep the partial trailing frame for the next read.
         buf.copy_within(whole..filled, 0);
