@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Low-latency market data feed server: lock-free broadcast ring + WebSocket fan-out"
 license = "MIT"
+default-run = "ferro_feed"
 
 [dependencies]
 tokio = { version = "1.38", features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal", "io-util"] }
