@@ -10,7 +10,7 @@
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{Sink, SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
@@ -163,7 +163,7 @@ impl Session {
 
     async fn write_burst<S>(&mut self, tx: &mut S) -> Result<(), WsError>
     where
-        S: SinkExt<Message, Error = WsError> + Unpin,
+        S: Sink<Message, Error = WsError> + Unpin,
     {
         if self.burst.is_empty() {
             return Ok(());
